@@ -1,7 +1,7 @@
-# probar-red-siamesa.py
 import cv2
 import numpy as np
 import tensorflow as tf
+import bluetooth
 from keras.models import load_model
 from keras.saving import register_keras_serializable
 
@@ -36,45 +36,70 @@ def write_on_frame(frame, text, text_x, text_y):
     cv2.putText(frame, text, (text_x, text_y - 10), cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(0, 0, 0), thickness=2)
     return frame
 
-# Inicializar la cámara
-cap = cv2.VideoCapture(0)
+# Conectar al dispositivo Bluetooth del celular
+print("Buscando dispositivos Bluetooth...")
+nearby_devices = bluetooth.discover_devices(duration=8, lookup_names=True)
+
+if not nearby_devices:
+    print("No se encontraron dispositivos Bluetooth. Asegúrate de que el celular está en modo visible.")
+    exit()
+
+print("Dispositivos encontrados:")
+for idx, (addr, name) in enumerate(nearby_devices):
+    print(f"{idx}: {name} - {addr}")
+
+# Seleccionar el dispositivo
+device_idx = int(input("Selecciona el índice del dispositivo: "))
+device_addr = nearby_devices[device_idx][0]
+
+# Crear conexión Bluetooth
+port = 1  # Generalmente 1 es el puerto predeterminado
+sock = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
+
+try:
+    sock.connect((device_addr, port))
+    print(f"Conectado a {nearby_devices[device_idx][1]}")
+except Exception as e:
+    print("Error al conectar Bluetooth:", e)
+    exit()
 
 # Onboarding: Capturar una imagen de referencia
-print("Presiona 's' para capturar la imagen de referencia.")
+print("Enviando solicitud para capturar imagen de referencia en el celular. Pulsa 's' en el celular.")
 while True:
-    ret, frame = cap.read()
-    cv2.imshow('Onboarding', frame)
-    if cv2.waitKey(20) & 0xFF == ord('s'):
-        onboarding_img = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    data = sock.recv(1024)  # Recibe datos del celular
+    if data and data.decode().strip() == "captura":
+        img_bytes = sock.recv(50000)  # Recibir imagen
+        np_arr = np.frombuffer(img_bytes, np.uint8)
+        onboarding_img = cv2.imdecode(np_arr, cv2.IMREAD_GRAYSCALE)
         onboarding_img = cv2.resize(onboarding_img, (92, 112))
         onboarding_img = onboarding_img.astype('float32') / 255
         onboarding_img = onboarding_img.reshape(1, 112, 92, 1)
         break
 
-cv2.destroyAllWindows()
+print("Imagen de referencia capturada.")
 
-# Reconocimiento facial en tiempo real
-print("Presiona 'q' para salir.")
+# Reconocimiento facial en tiempo real desde el celular
+print("Presiona 'q' en el celular para salir.")
+
 while True:
-    ret, frame = cap.read()
-    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    recognition_img = cv2.resize(gray_frame, (92, 112))
-    recognition_img = recognition_img.astype('float32') / 255
-    recognition_img = recognition_img.reshape(1, 112, 92, 1)
+    data = sock.recv(1024)
+    if data and data.decode().strip() == "captura":
+        img_bytes = sock.recv(50000)  # Recibir imagen
+        np_arr = np.frombuffer(img_bytes, np.uint8)
+        recognition_img = cv2.imdecode(np_arr, cv2.IMREAD_GRAYSCALE)
+        recognition_img = cv2.resize(recognition_img, (92, 112))
+        recognition_img = recognition_img.astype('float32') / 255
+        recognition_img = recognition_img.reshape(1, 112, 92, 1)
 
-    # Realizar predicción
-    pred = model.predict([onboarding_img, recognition_img])[0][0]
-    if pred < 0.5:
-        text = "si es men"
-    else:
-        text = "no es ese men"
+        # Realizar predicción
+        pred = model.predict([onboarding_img, recognition_img])[0][0]
+        text = "si es men" if pred < 0.5 else "no es ese men"
 
-    # Mostrar el resultado en el frame
-    frame = write_on_frame(frame, text, 50, 50)
-    cv2.imshow('Reconocimiento Facial', frame)
+        # Mostrar en consola (ya que no estamos usando ventana de OpenCV)
+        print(text)
 
-    if cv2.waitKey(1) & 0xFF == ord('q'):
+    if data and data.decode().strip() == "q":
         break
 
-cap.release()
-cv2.destroyAllWindows()
+sock.close()
+print("Conexión Bluetooth cerrada.")

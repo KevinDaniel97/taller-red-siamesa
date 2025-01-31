@@ -9,6 +9,7 @@ from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from keras.optimizers import Adam
 from keras.saving import register_keras_serializable
+from multiprocessing import Pool, cpu_count
 
 # Registrar la función personalizada
 @register_keras_serializable()
@@ -63,74 +64,86 @@ def create_shared_network(input_shape):
     model.add(Dense(units=128, activation='sigmoid'))
     return model
 
+def process_image(file, folder, target_size):
+    img = load_img(folder + "/" + file, color_mode='grayscale')
+    img = img_to_array(img)
+    img = cv2.resize(img, target_size)
+    img = img.astype('float32') / 255
+    img = img.reshape(target_size[0], target_size[1], 1)
+    return img
+
 def get_data(dir, target_size=(112, 92)):
     X_train, Y_train = [], []
     X_test, Y_test = [], []
     subfolders = sorted([file.path for file in os.scandir(dir) if file.is_dir()])
-    for idx, folder in enumerate(subfolders):
-        for file in sorted(os.listdir(folder)):
-            # Cargar la imagen en escala de grises
-            img = load_img(folder + "/" + file, color_mode='grayscale')
-            
-            # Convertir la imagen a un array de NumPy
-            img = img_to_array(img)
-            
-            # Redimensionar la imagen al tamaño objetivo
-            img = cv2.resize(img, target_size)
-            
-            # Normalizar la imagen (escala de 0 a 1)
-            img = img.astype('float32') / 255
-            
-            # Asegurarse de que la imagen tenga la forma correcta (alto, ancho, canales)
-            img = img.reshape(target_size[0], target_size[1], 1)
-            
-            # Dividir los datos en entrenamiento y prueba
-            if idx < 35:
-                X_train.append(img)
-                Y_train.append(idx)
-            else:
-                X_test.append(img)
-                Y_test.append(idx - 35)
-
-    # Convertir las listas a arrays de NumPy
-    X_train = np.array(X_train)
-    X_test = np.array(X_test)
-    Y_train = np.array(Y_train)
-    Y_test = np.array(Y_test)
     
-    return (X_train, Y_train), (X_test, Y_test)
+    with Pool(cpu_count()) as pool:
+        for idx, folder in enumerate(subfolders):
+            files = sorted(os.listdir(folder))
+            images = pool.starmap(process_image, [(file, folder, target_size) for file in files])
+            
+            if idx < 35:
+                X_train.extend(images)
+                Y_train.extend([idx] * len(images))
+            else:
+                X_test.extend(images)
+                Y_test.extend([idx - 35] * len(images))
+
+    return (np.array(X_train), np.array(Y_train)), (np.array(X_test), np.array(Y_test))
 
 # Entrenamiento del modelo
-faces_dir = 'C:/Users/pc/Documents/taller_red_deep/faces_dir/actor_faces'  # Ajusta la ruta a tu directorio de imágenes
-(X_train, Y_train), (X_test, Y_test) = get_data(faces_dir)
-num_classes = len(np.unique(Y_train))
-input_shape = X_train.shape[1:]
-shared_network = create_shared_network(input_shape)
-input_top = Input(shape=input_shape)
-input_bottom = Input(shape=input_shape)
-output_top = shared_network(input_top)
-output_bottom = shared_network(input_bottom)
-distance = Lambda(euclidean_distance, output_shape=(1,))([output_top, output_bottom])
-model = Model(inputs=[input_top, input_bottom], outputs=distance)
-training_pairs, training_labels = create_pairs(X_train, Y_train, num_classes=num_classes)
+if __name__ == '__main__':
+    # Desactivar oneDNN custom operations si es necesario
+    os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
-# Data Augmentation
-datagen = ImageDataGenerator(
-    rotation_range=20,
-    width_shift_range=0.2,
-    height_shift_range=0.2,
-    brightness_range=[0.8, 1.2],
-    horizontal_flip=True
-)
-augmented_data = datagen.flow(X_train, Y_train, batch_size=32)
+    faces_dir = 'C:/Users/pc/Documents/taller_red_deep/faces_dir/archive'  # Ajusta la ruta a tu directorio de imágenes
+    (X_train, Y_train), (X_test, Y_test) = get_data(faces_dir)
+    num_classes = len(np.unique(Y_train))
+    input_shape = X_train.shape[1:]
+    shared_network = create_shared_network(input_shape)
+    input_top = Input(shape=input_shape)
+    input_bottom = Input(shape=input_shape)
+    output_top = shared_network(input_top)
+    output_bottom = shared_network(input_bottom)
+    distance = Lambda(euclidean_distance, output_shape=(1,))([output_top, output_bottom])
+    model = Model(inputs=[input_top, input_bottom], outputs=distance)
+    training_pairs, training_labels = create_pairs(X_train, Y_train, num_classes=num_classes)
 
-# Compilar el modelo
-optimizer = Adam(learning_rate=0.0001)
-model.compile(loss=contrastive_loss, optimizer=optimizer, metrics=[accuracy])
+    # Data Augmentation
+    datagen = ImageDataGenerator(
+        rotation_range=20,
+        width_shift_range=0.2,
+        height_shift_range=0.2,
+        brightness_range=[0.8, 1.2],
+        horizontal_flip=True
+    )
 
-# Entrenar el modelo
-model.fit([training_pairs[:, 0], training_pairs[:, 1]], training_labels, batch_size=64, epochs=20)
+    # Función para aplicar aumento de datos
+    def augment_images(images, labels, datagen, batch_size=32):
+        augmented_images, augmented_labels = [], []
+        total_images = len(images)
+        steps = int(np.ceil(total_images / batch_size))  # Calcular el número de pasos necesarios
 
-# Guardar el modelo entrenado
-model.save('siamese_nn.keras')
-print("Modelo entrenado y guardado como 'siamese_nn.keras'.")
+        # Crear un generador de datos aumentados
+        data_gen = datagen.flow(images, labels, batch_size=batch_size, shuffle=False)
+
+        for _ in range(steps):  # Iterar solo el número de pasos necesarios
+            x, y = next(data_gen)  # Obtener el siguiente lote de datos aumentados
+            augmented_images.append(x)
+            augmented_labels.append(y)
+
+        return np.concatenate(augmented_images), np.concatenate(augmented_labels)
+
+    # Aplicar aumento de datos
+    augmented_X_train, augmented_Y_train = augment_images(X_train, Y_train, datagen)
+
+    # Compilar el modelo
+    optimizer = Adam(learning_rate=0.0001)
+    model.compile(loss=contrastive_loss, optimizer=optimizer, metrics=[accuracy])
+
+    # Entrenar el modelo
+    model.fit([training_pairs[:, 0], training_pairs[:, 1]], training_labels, batch_size=64, epochs=20)
+
+    # Guardar el modelo entrenado
+    model.save('siamese_nn.keras')
+    print("Modelo entrenado y guardado como 'siamese_nn.keras'.")
