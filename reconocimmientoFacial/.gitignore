@@ -1,0 +1,12 @@
+/.venv
+/dataset
+/__pycache__
+/redes_entrenadas
+
+# Ignorar archivos .log
+*.rar
+*.zip
+
+# Ignorar archivos txt
+list_attr_celeba.txt
+list_attr_celeba_prepared.txt
