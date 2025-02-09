@@ -7,7 +7,7 @@ from tensorflow.keras.models import load_model
 padding = 100
 
 # Directorio de las imágenes
-image_dir = 'D:/taller/dataset'
+image_dir = 'C:/taller-red-siamesa/dataset'
 
 print("Carpetas en el directorio de imágenes:")
 print(os.listdir(image_dir))  # Esto mostrará todas las carpetas encontradas
