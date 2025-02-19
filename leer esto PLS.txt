@@ -1,0 +1,4 @@
+para el .bat funcione 
+tienen q cambiar la ruta del Menu.py a la suya
+
+Pilas......
