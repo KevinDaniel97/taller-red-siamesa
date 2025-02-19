@@ -7,21 +7,21 @@ from tensorflow.keras.models import load_model
 padding = 50  # Ajustado para mejorar precisión
 
 # Directorio de imágenes
-image_dir = 'C:/Users/User/Downloads/taller-red-siamesa-vesion3f/taller-red-siamesa-vesion3f/dataset'
+image_dir = 'D:/taller/dataset'
 
 print("Carpetas en el directorio de imágenes:")
 print(os.listdir(image_dir))  
 
 # Mapeo de clases basado en carpetas
 class_to_name = {0: "Desconocido"}
-for idx, folder_name in enumerate(os.listdir(image_dir), start=1):
+for idx, folder_name in enumerate(os.listdir(image_dir), start=0):
     partes = folder_name.split("_")
-    user_name = partes[1] if len(partes) > 1 else "Desconocido"
+    user_name = partes[0] if len(partes) > 0 else "Desconocido"
     class_to_name[idx] = user_name
 
 # Cargar el modelo de predicción
 try:
-    model_facial = load_model('C:/Users/User/Downloads/taller-red-siamesa-vesion3f/taller-red-siamesa-vesion3f/reconocimmientoFacial/redes_entrenadas/ReconocimientoFacialV04.h5')
+    model_facial = load_model('D:/taller/reconocimmientoFacial/redes_entrenadas/ReconocimientoFacialV02.h5')
     print("✅ Modelo cargado exitosamente.")
 except Exception as e:
     print(f"❌ Error al cargar el modelo: {e}")

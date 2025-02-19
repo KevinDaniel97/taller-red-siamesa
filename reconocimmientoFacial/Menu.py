@@ -57,11 +57,10 @@ canvas.tag_raise(titulo_id)
 
 # Botones con diseño moderno
 botones = [
-    ("📷 Camera Test", lambda: ejecutar_script("CameraTest.py")),
-    ("📡 Completo Tiempo Real", lambda: ejecutar_script("CompletoTiempoReal.py")),
-    ("📂 Generar Label Dataset", lambda: ejecutar_script("GenerarLabeldataset.py")),
-    ("🚀 Tiempo Real", lambda: ejecutar_script("TiempoReal.py")),
-    ("🧠 Entrenamiento (VS Code)", lambda: abrir_en_vscode("EntrenamientoRF.ipynb")),
+    ("📷 TiempoReal", lambda: ejecutar_script("TiempoReal.py")),
+    ("📡 HealMaps", lambda: ejecutar_script("CompletoTiempoReal_HealMaps copy 2.py")),
+    ("📂 Guardar Nuevo", lambda: ejecutar_script("GuardarNuevo.py")),
+    ("🚀 Entrenamiento (VS Code)", lambda: ejecutar_script("EntrenamientoRF.py")),
     ("🔍 Predicción (VS Code)", lambda: abrir_en_vscode("Prediccion.ipynb")),
 ]
 

@@ -1,4 +1,4 @@
 @echo off
-cd /d "D:\Uce\t10\taller 3\taller-red-siamesa\reconocimmientoFacial"
+cd /d "C:\Users\pc\Documents\taller_red_deep\taller-red-siamesa\reconocimmientoFacial"
 python Menu.py
 pause
